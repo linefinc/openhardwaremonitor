@@ -294,6 +294,9 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\ram.png" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Web\js\d3.v3.min.js" />
+  </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
     <VisualStudio AllowExistingFolder="true" />

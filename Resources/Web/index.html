@@ -1,3 +1,4 @@
+
 <!-- This Source Code Form is subject to the terms of the Mozilla Public
    - License, v. 2.0. If a copy of the MPL was not distributed with this
    - file, You can obtain one at http://mozilla.org/MPL/2.0/.  
@@ -11,7 +12,7 @@
     <script type='text/javascript' src='js/jquery.tmpl.min.js'></script>
     <script type='text/javascript' src='js/knockout-2.1.0.min.js'></script>
     <script type='text/javascript' src='js/knockout.mapping-latest.min.js'></script>
-
+    <script type="text/javascript" src="js/d3.v3.min.js"></script>
     <link href="css/jquery.treeTable.css" rel="stylesheet" type="text/css" />
     <script type='text/javascript' src='js/jquery.treeTable.min.js'></script>
 
@@ -26,7 +27,31 @@
         display: inline-block;
         width: 100px;
       }
-    </style>
+  
+
+body { font: 12px Arial;}
+
+path { 
+    stroke: steelblue;
+    stroke-width: 2;
+    fill: none;
+}
+
+.axis path,
+.axis line {
+    fill: none;
+    stroke: grey;
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+}
+
+#idGraph {
+    position: absolute;
+    right: 30px;
+    top: 30px;
+        }
+
+</style>
 
 
     <script type='text/javascript' src='js/ohm_web.js'></script>
@@ -57,5 +82,155 @@
           </tbody>
         </table>
       </div>
-    </body>
+	  <div id="idGraph" align="right"/>
+
+	<script type="text/javascript">
+
+// Set the dimensions of the canvas / graph
+var margin = {top: 20, right: 20, bottom: 20, left: 50};
+var width = 600 - margin.left - margin.right;
+var height = 800 - margin.top - margin.bottom;
+
+var windowMargin = 30;
+	
+// Parse the date / time
+var parseDate = d3.time.format("%m/%d/%Y %H:%M:%S").parse;
+
+var dataset= [];
+
+  
+// Adds the svg canvas
+var svg = d3.select("#idGraph")
+    .append("svg")
+        //.attr("width", width + margin.left + margin.right)
+		.attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom);
+
+	svg.append("rect")
+			.attr("x", 0)
+			.attr("y", 0)
+			.attr("height", "100%")
+			.attr("width", "100%")
+			.attr("fill","yellow")
+			.attr("fill-opacity","0.4");
+		
+// Get the data
+d3.csv("data.csv", function(error, data) {
+    // get header and make different svg g
+	var headers = d3.keys(data[0]);
+	
+	console.log("H: " + height);
+	console.log("N: " + (height/ (headers.length - 2)));
+	
+	for(var i = 0; i< headers.length; i++)
+	{
+		console.log("headers[" +i +"]:"+ headers[i]);
+	}
+	
+	// process data
+	data.forEach(function(d) {
+		if(!parseDate(d.Time))
+			console.log("Error: " + d.Time);
+		else
+		{
+		    d.Time = parseDate(d.Time);
+		}
+	
+		
+		for (var i = 1; i < headers.length; i++) {
+			if(parseFloat(d[headers[i]]))
+				d[headers[i]] = parseFloat(d[headers[i]]);
+		}
+    });
+
+	data = data.sort(function(a,b) { return +a.Time - +b.Time; });
+    dataset = data;
+
+	var numSensors = headers.length ;
+	
+	for (var i = 1; i <  3; i++) 
+		for (var j = 1; j < dataset.length; j++) {
+			console.log("## " + j + " , " + headers[i] + " > " + dataset[j][headers[i]]);
+		//data.forEach(function(d) {console.log("# " + i + " > " + d[headers[i]]);})
+		}
+	
+	
+	for (var i = 1; i < headers.length; i++) {
+		var windowHeight = height / (numSensors - 1);
+		var posY = windowHeight * ( i - 1 ) + margin.top;
+		
+	
+		var svgLocal = d3.select("svg")
+						.append("g")
+						.attr("id","svg-col"+ i)
+						.attr("transform", "translate(" + margin.left + "," + posY + ")");
+
+		svgLocal.append("rect")
+			.attr("x", 0)
+			.attr("y", 0)
+			.attr("height", windowHeight - windowMargin)
+			.attr("width", width)
+			.attr("fill","red")
+			.attr("fill-opacity","0.4");
+			
+		// Set the ranges
+		var xScale = d3.time.scale().range([0, width]);
+		var yScale = d3.scale.linear().range([windowHeight - windowMargin, 0]);
+		
+		// Scale the range of the data
+		xScale.domain(d3.extent(data, function(d) { return d.Time; }));
+		yScale.domain(d3.extent(data, function(d) { return d[headers[i]]; }));
+		
+		
+		console.log("# " + i + " > max:" +( d3.max(data, function(d) { return d[headers[i]]; }) ));
+		
+		
+		
+		
+		// Define the axes
+		var xAxis = d3.svg.axis().scale(xScale).orient("bottom").ticks(5);
+		var yAxis = d3.svg.axis().scale(yScale).orient("left").ticks(5);
+		
+		// Define the line
+		var valueline = d3.svg.line()
+			.x(function(d) { return xScale(d.Time); })
+			.y(function(d) { return yScale(d[headers[i]]); });
+		
+		// Add the valueline path.
+		svgLocal.append("path")
+				.attr("class", "line")
+				.attr("d", valueline(data));
+
+		// Add the X Axis
+		svgLocal.append("g")
+				.attr("class", "x axis")
+				.attr("transform", "translate(0," + (windowHeight - windowMargin) + ")")
+				.call(xAxis);
+
+		// Add the Y Axis
+		svgLocal.append("g")
+				.attr("class", "y axis")
+				.call(yAxis);
+
+		svgLocal.append("text")
+			.attr("x", width - 6)
+			.attr("y", 6)
+			.attr("text-anchor","end")
+			.text(function(d) { return headers[i] });
+		
+		svgLocal.append("text")
+			.attr("x", width /2 )
+			.attr("y", 6)
+			.attr("text-anchor","end")
+			.text(function(d) { return i });
+		
+		svgLocal.append("rect")
+			.attr("x", 0)
+			.attr("y", 0)
+			.attr("height", 5)
+			.attr("width", 5);
+	}
+});
+</script>
+	</body>
   </html>
