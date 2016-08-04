@@ -350,42 +350,61 @@ namespace OpenHardwareMonitor.Utilities
                 return;
             }
 
-            string filePath = fileList[0];
-
-            response.ContentType = GetcontentType(Path.GetExtension(filePath));
+            // sort: inverse alphabetical sort
+            Array.Sort(fileList, delegate (string A, string B) { return B.CompareTo(A); });
+            
             const int bufferSize = 1024 * 512; //512KB
+            const int MaxRows = 1000;
 
             MemoryStream ms = new MemoryStream();
             BinaryWriter bw = new BinaryWriter(ms);
 
-            using (var fs = File.OpenText(filePath))
-            {
-                // setup header 
-                //          We need a Time as name of first column
-                bw.Write(Encoding.ASCII.GetBytes("Time"));
-                bw.Write(Encoding.ASCII.GetBytes(fs.ReadLine()));
-                bw.Write(Encoding.ASCII.GetBytes("\r\n"));
-                fs.ReadLine(); // skip second line
-                
-                while (fs.Peek() >= 0)
-                {
-                    byte[] temp = Encoding.ASCII.GetBytes(fs.ReadLine());
             
-                    bw.Write(temp);
+            int rowCounter = 0;
+            foreach (string filePath in fileList)
+            {
+                using (var fs = File.OpenText(filePath))
+                {
+                    if (rowCounter == 0)
+                    {
+                        //      setup header 
+                        //          We need a Time as name of first column
+                        bw.Write(Encoding.ASCII.GetBytes("Time"));
+                        bw.Write(Encoding.ASCII.GetBytes(fs.ReadLine()));
+                        bw.Write(Encoding.ASCII.GetBytes("\r\n"));
+                        fs.ReadLine(); // skip second line
+                        rowCounter++;                        
+                    }
+                    else
+                    {
+                        // second file , we don't need header section
+                        fs.ReadLine(); // skip first line
+                        fs.ReadLine(); // skip second line
+                    }
 
-                    bw.Write(Encoding.ASCII.GetBytes("\r\n"));
-                    if (ms.Length > bufferSize)
-                        break;
+                    while (fs.Peek() >= 0)
+                    {
+                        byte[] temp = Encoding.ASCII.GetBytes(fs.ReadLine());
+
+                        bw.Write(temp);
+
+                        bw.Write(Encoding.ASCII.GetBytes("\r\n"));
+                        if (ms.Length > bufferSize)
+                            break;
+                        if((rowCounter++) > MaxRows)
+                            break;
+                    }
                 }
-
-                bw.Flush();
-                ms.Flush();
-
-                response.ContentLength64 = ms.Length;
-                response.OutputStream.Write(ms.GetBuffer(), 0, Convert.ToInt32(ms.Length));
-
-                response.OutputStream.Close();
             }
+            bw.Flush();
+            ms.Flush();
+
+            response.ContentType = GetcontentType(".csv");
+            response.ContentLength64 = ms.Length;
+            response.OutputStream.Write(ms.GetBuffer(), 0, Convert.ToInt32(ms.Length));
+
+            response.OutputStream.Close();
+
         }
 
         private static void ReturnFile(HttpListenerContext context, string filePath)
@@ -425,6 +444,7 @@ namespace OpenHardwareMonitor.Utilities
                 case ".ppt": return "application/vnd.ms-powerpoint";
                 case ".zip": return "application/zip";
                 case ".txt": return "text/plain";
+                case ".csv": return "text/csv";
                 default: return "application/octet-stream";
             }
         }
